@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from fastapi.concurrency import run_in_threadpool
 
 from backend import run_travel_agent
 
@@ -64,10 +65,11 @@ async def travel_planner(request_data: TravelRequest):
                 }
             )
 
-        result = run_travel_agent(
-            user_input=user_message,
-            thread_id=request_data.thread_id
-        )
+        result = await run_in_threadpool(
+                run_travel_agent,
+                   user_message,
+               request_data.thread_id
+                )
 
         return JSONResponse(
             content={
