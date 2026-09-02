@@ -10,8 +10,7 @@ from pydantic import BaseModel
 
 from fastapi.concurrency import run_in_threadpool
 
-from backend import run_travel_agent
-
+from backend import run_travel_agent, resume_travel_agent
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -42,6 +41,11 @@ class TravelRequest(BaseModel):
     message: str
     thread_id: str | None = None
     
+    
+class ApprovalRequest(BaseModel):
+    thread_id: str
+    approved: bool
+    feedback: str = ""
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -72,16 +76,27 @@ async def travel_planner(request_data: TravelRequest):
                 )
 
         return JSONResponse(
-            content={
-                "success": True,
-                "thread_id": result["thread_id"],
-                "answer": result["answer"],
-                "flight_results": result["flight_results"],
-                "hotel_results": result["hotel_results"],
-                "itinerary": result["itinerary"],
-                "llm_calls": result["llm_calls"],
-            }
-        )
+    content={
+        "success": True,
+        "thread_id": result["thread_id"],
+        "answer": result["answer"],
+
+        "requires_approval": result["requires_approval"],
+        "approval_request": result["approval_request"],
+
+        "flight_results": result["flight_results"],
+        "hotel_results": result["hotel_results"],
+        "weather_results": result["weather_results"],
+        "budget_results": result["budget_results"],
+        "itinerary": result["itinerary"],
+
+        "approved": result["approved"],
+        "human_feedback": result["human_feedback"],
+        "final_response": result["final_response"],
+
+        "llm_calls": result["llm_calls"],
+    }
+)
 
     except Exception as e:
         print("ERROR:", e)
@@ -95,6 +110,49 @@ async def travel_planner(request_data: TravelRequest):
             }
         )
 
+
+
+
+@app.post("/api/travel/approve")
+async def approve_travel(request_data: ApprovalRequest):
+    try:
+        result = await run_in_threadpool(
+            resume_travel_agent,
+            request_data.thread_id,
+            request_data.approved,
+            request_data.feedback
+        )
+
+        return JSONResponse(
+            content={
+                "success": True,
+                "thread_id": result["thread_id"],
+                "answer": result["answer"],
+                "requires_approval": result["requires_approval"],
+                "approval_request": result["approval_request"],
+                "flight_results": result["flight_results"],
+                "hotel_results": result["hotel_results"],
+                "weather_results": result["weather_results"],
+                "budget_results": result["budget_results"],
+                "itinerary": result["itinerary"],
+                "approved": result["approved"],
+                "human_feedback": result["human_feedback"],
+                "final_response": result["final_response"],
+                "llm_calls": result["llm_calls"],
+            }
+        )
+
+    except Exception as e:
+        print("APPROVAL ERROR:", e)
+        traceback.print_exc()
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e)
+            }
+        )
 
 
 @app.get("/health")
